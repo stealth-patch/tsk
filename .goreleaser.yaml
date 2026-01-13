@@ -1,0 +1,37 @@
+version: 2
+project_name: tsk
+
+builds:
+  - main: ./cmd/tsk
+    binary: tsk
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - repository:
+      owner: stealth-patch
+      name: homebrew-tap
+    homepage: https://github.com/stealth-patch/tsk
+    description: A terminal task manager with TUI and CLI
+    license: MIT
+    install: |
+      bin.install "tsk"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
