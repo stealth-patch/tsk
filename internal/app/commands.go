@@ -93,6 +93,17 @@ func createProject(st *store.SQLiteStore, name string) tea.Cmd {
 	}
 }
 
+func createProjectWithDesc(st *store.SQLiteStore, name, description string) tea.Cmd {
+	return func() tea.Msg {
+		project := model.NewProject(name)
+		project.Description = description
+		if err := st.CreateProject(project); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return ProjectCreatedMsg{Project: project}
+	}
+}
+
 func addTagToTask(st *store.SQLiteStore, taskID, tagID int64) tea.Cmd {
 	return func() tea.Msg {
 		if err := st.AddTagToTask(taskID, tagID); err != nil {

@@ -40,6 +40,7 @@ const (
 	OverlayNone OverlayMode = iota
 	OverlayHelp
 	OverlayProjectSelect
+	OverlayProjectCreate
 	OverlayConfirmDelete
 	OverlayDueDate
 	OverlayTagSelect
@@ -87,6 +88,11 @@ type Model struct {
 	// Stats
 	totalTasks    int
 	doneTaskCount int
+
+	// Project create form
+	projectFormName  string
+	projectFormDesc  string
+	projectFormFocus int // 0: name, 1: desc
 
 	// Status
 	statusText  string
@@ -261,15 +267,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TaskCreatedMsg:
 		m.statusText = fmt.Sprintf("✓ Created: %s", msg.Task.Title)
-		cmds = append(cmds, m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+		cmds = append(cmds, m.reloadTasks(), loadProjects(m.store), clearStatusAfter(1500*time.Millisecond))
 
 	case TaskUpdatedMsg:
 		m.statusText = "✓ Updated"
-		cmds = append(cmds, m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+		cmds = append(cmds, m.reloadTasks(), loadProjects(m.store), clearStatusAfter(1500*time.Millisecond))
 
 	case TaskDeletedMsg:
 		m.statusText = "✓ Deleted"
-		cmds = append(cmds, m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+		cmds = append(cmds, m.reloadTasks(), loadProjects(m.store), clearStatusAfter(1500*time.Millisecond))
 
 	case ProjectCreatedMsg:
 		m.statusText = fmt.Sprintf("✓ Created project: %s", msg.Project.Name)
@@ -329,14 +335,12 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.reloadTasks()
 
 		case msg.String() == "n" || msg.String() == "a":
-			// Add new project
-			m.overlayMode = OverlayNone
-			m.inputMode = InputAddProject
-			m.inputPrompt = "New project: "
-			m.textInput.SetValue("")
-			m.textInput.Placeholder = "Enter project name..."
-			m.textInput.Focus()
-			return m, textinput.Blink
+			// Open project create overlay
+			m.overlayMode = OverlayProjectCreate
+			m.projectFormName = ""
+			m.projectFormDesc = ""
+			m.projectFormFocus = 0
+			return m, nil
 		}
 
 	case OverlayConfirmDelete:
@@ -450,6 +454,53 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cmd = addTagToTask(m.store, task.ID, tag.ID)
 			}
 			return m, cmd
+		}
+
+	case OverlayProjectCreate:
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			m.overlayMode = OverlayNone
+			return m, nil
+
+		case msg.Type == tea.KeyTab || msg.Type == tea.KeyShiftTab:
+			// Toggle between name and desc fields
+			if m.projectFormFocus == 0 {
+				m.projectFormFocus = 1
+			} else {
+				m.projectFormFocus = 0
+			}
+
+		case msg.Type == tea.KeyEnter:
+			// Create project
+			name := strings.TrimSpace(m.projectFormName)
+			if name == "" {
+				m.statusText = "Project name is required"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			m.overlayMode = OverlayNone
+			return m, createProjectWithDesc(m.store, name, strings.TrimSpace(m.projectFormDesc))
+
+		case msg.Type == tea.KeyBackspace:
+			if m.projectFormFocus == 0 && len(m.projectFormName) > 0 {
+				m.projectFormName = m.projectFormName[:len(m.projectFormName)-1]
+			} else if m.projectFormFocus == 1 && len(m.projectFormDesc) > 0 {
+				m.projectFormDesc = m.projectFormDesc[:len(m.projectFormDesc)-1]
+			}
+
+		case msg.Type == tea.KeyRunes:
+			if m.projectFormFocus == 0 {
+				m.projectFormName += string(msg.Runes)
+			} else {
+				m.projectFormDesc += string(msg.Runes)
+			}
+
+		case msg.Type == tea.KeySpace:
+			if m.projectFormFocus == 0 {
+				m.projectFormName += " "
+			} else {
+				m.projectFormDesc += " "
+			}
 		}
 
 	case OverlayTaskDetail:
@@ -827,6 +878,8 @@ func (m Model) renderOverlay() string {
 		return m.renderHelpOverlay()
 	case OverlayProjectSelect:
 		return m.renderProjectSelectOverlay()
+	case OverlayProjectCreate:
+		return m.renderProjectCreateOverlay()
 	case OverlayConfirmDelete:
 		return m.renderConfirmDeleteOverlay()
 	case OverlayDueDate:
@@ -918,6 +971,51 @@ func (m Model) renderProjectSelectOverlay() string {
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
 		Width(40).
+		Render(content)
+}
+
+func (m Model) renderProjectCreateOverlay() string {
+	title := styles.Header.Render("Create Project")
+
+	// Name field
+	nameLabel := "Name:"
+	nameValue := m.projectFormName
+	if nameValue == "" {
+		nameValue = "_"
+	}
+	nameStyle := styles.TaskItem
+	if m.projectFormFocus == 0 {
+		nameStyle = styles.TaskItemSelected
+	}
+	nameField := nameStyle.Render(fmt.Sprintf("  %s %s", nameLabel, nameValue))
+
+	// Description field
+	descLabel := "Description:"
+	descValue := m.projectFormDesc
+	if descValue == "" {
+		descValue = "(optional)"
+	}
+	descStyle := styles.TaskItem
+	if m.projectFormFocus == 1 {
+		descStyle = styles.TaskItemSelected
+	}
+	descField := descStyle.Render(fmt.Sprintf("  %s %s", descLabel, descValue))
+
+	content := strings.Join([]string{
+		title,
+		"",
+		nameField,
+		"",
+		descField,
+		"",
+		styles.MutedStyle.Render("Tab: switch  Enter: create  Esc: cancel"),
+	}, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Primary).
+		Padding(1, 2).
+		Width(45).
 		Render(content)
 }
 
