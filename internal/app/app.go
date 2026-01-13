@@ -2064,7 +2064,7 @@ func (m Model) renderBoardTaskItem(task model.Task, selected bool, maxWidth int)
 	if task.Status == model.StatusDone {
 		if task.CompletedAt != nil {
 			completed := *task.CompletedAt
-			text := "✓ " + completed.Format("2 Jan")
+			text := "✓ " + completed.Format("06/1/2")
 			// Show difference from due date
 			if task.DueDate != nil {
 				due := *task.DueDate
@@ -2085,7 +2085,7 @@ func (m Model) renderBoardTaskItem(task model.Task, selected bool, maxWidth int)
 		}
 	} else if task.DueDate != nil {
 		if selected {
-			suffix = " · " + task.DueDate.Format("2 Jan")
+			suffix = " · " + task.DueDate.Format("06/1/2")
 		} else {
 			suffix = " · " + m.formatDue(task)
 		}
@@ -2176,7 +2176,7 @@ func (m Model) formatDue(task model.Task) string {
 		text = due.Format("Mon")
 		dueStyle = styles.DueNormal
 	default:
-		text = due.Format("2 Jan")
+		text = due.Format("06/1/2")
 		dueStyle = styles.DueNormal
 	}
 
@@ -2189,8 +2189,7 @@ func (m Model) formatCompletedAt(task model.Task) string {
 	}
 
 	completed := *task.CompletedAt
-	// UK format
-	text := "✓ " + completed.Format("2 Jan 15:04")
+	text := "✓ " + completed.Format("06/1/2 15:04")
 
 	// Compare with due date if exists
 	if task.DueDate != nil {
