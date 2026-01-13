@@ -1140,6 +1140,19 @@ func (m Model) renderTaskDetailOverlay() string {
 	var lines []string
 	lines = append(lines, title, "")
 
+	// Project
+	lines = append(lines, styles.HelpKey.Render("Project"))
+	projectName := "None"
+	if task.ProjectID != nil {
+		for _, p := range m.projects {
+			if p.ID == *task.ProjectID {
+				projectName = p.Name
+				break
+			}
+		}
+	}
+	lines = append(lines, "  "+projectName, "")
+
 	// Title (wrap long titles)
 	lines = append(lines, styles.HelpKey.Render("Title"))
 	titleText := lipgloss.NewStyle().Width(56).Render("  " + task.Title)
