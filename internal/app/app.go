@@ -43,7 +43,9 @@ const (
 	OverlayProjectCreate
 	OverlayConfirmDelete
 	OverlayDueDate
+	OverlayDueDateCustom
 	OverlayTagSelect
+	OverlayTagCreate
 	OverlayTaskDetail
 	OverlayConfirmDeleteTag
 	OverlayConfirmDeleteProject
@@ -96,6 +98,12 @@ type Model struct {
 	projectFormName  string
 	projectFormDesc  string
 	projectFormFocus int // 0: name, 1: desc
+
+	// Tag create form
+	tagFormName string
+
+	// Due date custom form
+	dueDateFormValue string
 
 	// Status
 	statusText  string
@@ -451,15 +459,10 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				task.DueDate = &nextWeek
 			case 3: // Clear
 				task.DueDate = nil
-			case 4: // Custom - enter input mode
-				m.inputMode = InputDueDate
-				m.inputPrompt = "Due date (YYYY-MM-DD): "
-				// Default to 3 days from now
-				threeDaysLater := time.Now().AddDate(0, 0, 3)
-				m.textInput.SetValue("")
-				m.textInput.Placeholder = threeDaysLater.Format("2006-01-02")
-				m.textInput.Focus()
-				return m, textinput.Blink
+			case 4: // Custom - open custom date overlay
+				m.overlayMode = OverlayDueDateCustom
+				m.dueDateFormValue = ""
+				return m, nil
 			}
 			return m, updateTask(m.store, task)
 		}
@@ -488,14 +491,10 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.overlayCursor == len(m.tags) {
-				// Add new tag
-				m.overlayMode = OverlayNone
-				m.inputMode = InputAddTag
-				m.inputPrompt = "New tag: "
-				m.textInput.SetValue("")
-				m.textInput.Placeholder = "Enter tag name..."
-				m.textInput.Focus()
-				return m, textinput.Blink
+				// Add new tag - open tag create overlay
+				m.overlayMode = OverlayTagCreate
+				m.tagFormName = ""
+				return m, nil
 			}
 
 			// Toggle tag on task
@@ -537,6 +536,90 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.overlayMode = OverlayTagSelect
 		}
 		return m, nil
+
+	case OverlayTagCreate:
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			m.overlayMode = OverlayTagSelect
+			return m, nil
+
+		case msg.Type == tea.KeyEnter:
+			name := strings.TrimSpace(m.tagFormName)
+			if name == "" {
+				m.statusText = "Tag name is required"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			m.overlayMode = OverlayNone
+			task := m.selectedTask()
+			if task != nil {
+				// Create tag and add to task
+				return m, tea.Batch(
+					createTagAndAddToTask(m.store, name, task.ID),
+				)
+			}
+			return m, createTag(m.store, name)
+
+		case msg.Type == tea.KeyBackspace:
+			if len(m.tagFormName) > 0 {
+				m.tagFormName = m.tagFormName[:len(m.tagFormName)-1]
+			}
+
+		case msg.Type == tea.KeyRunes:
+			m.tagFormName += string(msg.Runes)
+
+		case msg.Type == tea.KeySpace:
+			m.tagFormName += " "
+		}
+
+	case OverlayDueDateCustom:
+		// Default placeholder: 3 days from now
+		placeholder := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			m.overlayMode = OverlayDueDate
+			return m, nil
+
+		case msg.Type == tea.KeyTab:
+			// Autocomplete with placeholder
+			if m.dueDateFormValue == "" {
+				m.dueDateFormValue = placeholder
+			}
+			return m, nil
+
+		case msg.Type == tea.KeyEnter:
+			dateStr := strings.TrimSpace(m.dueDateFormValue)
+			if dateStr == "" {
+				m.statusText = "Date is required"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			task := m.selectedTask()
+			if task == nil {
+				m.overlayMode = OverlayNone
+				return m, nil
+			}
+			// Parse date
+			dueDate, err := time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				m.statusText = "Invalid date format (use YYYY-MM-DD)"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			dueDate = time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 23, 59, 0, 0, time.Local)
+			task.DueDate = &dueDate
+			m.overlayMode = OverlayNone
+			return m, updateTask(m.store, task)
+
+		case msg.Type == tea.KeyBackspace:
+			if len(m.dueDateFormValue) > 0 {
+				m.dueDateFormValue = m.dueDateFormValue[:len(m.dueDateFormValue)-1]
+			}
+
+		case msg.Type == tea.KeyRunes:
+			m.dueDateFormValue += string(msg.Runes)
+		}
 
 	case OverlayProjectCreate:
 		switch {
@@ -1020,8 +1103,12 @@ func (m Model) renderOverlay() string {
 		return m.renderConfirmDeleteProjectOverlay()
 	case OverlayDueDate:
 		return m.renderDueDateOverlay()
+	case OverlayDueDateCustom:
+		return m.renderDueDateCustomOverlay()
 	case OverlayTagSelect:
 		return m.renderTagSelectOverlay()
+	case OverlayTagCreate:
+		return m.renderTagCreateOverlay()
 	case OverlayRecurrenceSelect:
 		return m.renderRecurrenceSelectOverlay()
 	case OverlayTaskDetail:
@@ -1101,7 +1188,7 @@ func (m Model) renderProjectSelectOverlay() string {
 		items = append(items, style.Render(text))
 	}
 
-	items = append(items, "", styles.MutedStyle.Render("Enter: select  n: new  Esc: cancel"))
+	items = append(items, "", styles.MutedStyle.Render("Enter: select  n: new  x: delete  Esc: cancel"))
 
 	content := strings.Join(items, "\n")
 
@@ -1109,7 +1196,7 @@ func (m Model) renderProjectSelectOverlay() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
-		Width(40).
+		Width(45).
 		Render(content)
 }
 
@@ -1209,6 +1296,40 @@ func (m Model) renderDueDateOverlay() string {
 		Render(content)
 }
 
+func (m Model) renderDueDateCustomOverlay() string {
+	title := styles.Header.Render("Custom Due Date")
+	placeholder := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+
+	// Input field
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Primary).
+		Padding(0, 1).
+		Width(20)
+
+	displayValue := m.dueDateFormValue
+	if displayValue == "" {
+		displayValue = styles.MutedStyle.Render(placeholder)
+	}
+	inputField := inputStyle.Render(displayValue + "▌")
+
+	content := strings.Join([]string{
+		title,
+		"",
+		"Format: YYYY-MM-DD",
+		"",
+		inputField,
+		"",
+		styles.MutedStyle.Render("Tab: autocomplete  Enter: confirm  Esc: back"),
+	}, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Primary).
+		Padding(1, 2).
+		Render(content)
+}
+
 func (m Model) renderTagSelectOverlay() string {
 	title := styles.Header.Render("Select Tags")
 
@@ -1248,7 +1369,7 @@ func (m Model) renderTagSelectOverlay() string {
 	}
 	items = append(items, style.Render("+ New tag..."))
 
-	items = append(items, "", styles.MutedStyle.Render("Enter: toggle  Esc: cancel"))
+	items = append(items, "", styles.MutedStyle.Render("Enter: toggle  x: delete  Esc: cancel"))
 
 	content := strings.Join(items, "\n")
 
@@ -1257,6 +1378,37 @@ func (m Model) renderTagSelectOverlay() string {
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
 		Width(35).
+		Render(content)
+}
+
+func (m Model) renderTagCreateOverlay() string {
+	title := styles.Header.Render("Create Tag")
+
+	// Input field
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(styles.Primary).
+		Padding(0, 1).
+		Width(25)
+
+	displayValue := m.tagFormName
+	if displayValue == "" {
+		displayValue = styles.MutedStyle.Render("Tag name...")
+	}
+	inputField := inputStyle.Render(displayValue + "▌")
+
+	content := strings.Join([]string{
+		title,
+		"",
+		inputField,
+		"",
+		styles.MutedStyle.Render("Enter: create  Esc: back"),
+	}, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Primary).
+		Padding(1, 2).
 		Render(content)
 }
 

@@ -132,6 +132,31 @@ func createTag(st *store.SQLiteStore, name string) tea.Cmd {
 	}
 }
 
+func createTagAndAddToTask(st *store.SQLiteStore, name string, taskID int64) tea.Cmd {
+	return func() tea.Msg {
+		// Check if tag exists
+		existing, err := st.GetTagByName(name)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		var tag *model.Tag
+		if existing != nil {
+			tag = existing
+		} else {
+			tag = model.NewTag(name)
+			if err := st.CreateTag(tag); err != nil {
+				return ErrorMsg{Err: err}
+			}
+		}
+
+		if err := st.AddTagToTask(taskID, tag.ID); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return TagCreatedMsg{Tag: tag}
+	}
+}
+
 func deleteTag(st *store.SQLiteStore, id int64) tea.Cmd {
 	return func() tea.Msg {
 		if err := st.DeleteTag(id); err != nil {
