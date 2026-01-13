@@ -1196,7 +1196,7 @@ func (m Model) renderProjectSelectOverlay() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
-		Width(45).
+		Width(50).
 		Render(content)
 }
 
@@ -1377,7 +1377,7 @@ func (m Model) renderTagSelectOverlay() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
-		Width(35).
+		Width(45).
 		Render(content)
 }
 
