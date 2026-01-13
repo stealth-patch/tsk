@@ -1307,11 +1307,14 @@ func (m Model) renderDueDateCustomOverlay() string {
 		Padding(0, 1).
 		Width(20)
 
-	displayValue := m.dueDateFormValue
-	if displayValue == "" {
-		displayValue = styles.MutedStyle.Render(placeholder)
+	var inputField string
+	if m.dueDateFormValue == "" {
+		// Empty: cursor on left, placeholder as hint on right
+		inputField = inputStyle.Render("▌" + styles.MutedStyle.Render(placeholder))
+	} else {
+		// Has value: show value with cursor at end
+		inputField = inputStyle.Render(m.dueDateFormValue + "▌")
 	}
-	inputField := inputStyle.Render(displayValue + "▌")
 
 	content := strings.Join([]string{
 		title,
