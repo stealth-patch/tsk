@@ -51,6 +51,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newRmCmd())
 	rootCmd.AddCommand(newProjectCmd())
 	rootCmd.AddCommand(newTagCmd())
+	rootCmd.AddCommand(newRecurrenceCmd())
 
 	return rootCmd
 }

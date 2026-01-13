@@ -69,6 +69,15 @@ func (s *SQLiteStore) ListTags() ([]model.Tag, error) {
 	return tags, nil
 }
 
+func (s *SQLiteStore) DeleteTag(id int64) error {
+	// task_tags are automatically deleted via ON DELETE CASCADE
+	_, err := s.db.Exec("DELETE FROM tags WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete tag: %w", err)
+	}
+	return nil
+}
+
 func (s *SQLiteStore) AddTagToTask(taskID, tagID int64) error {
 	_, err := s.db.Exec(`
 		INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)

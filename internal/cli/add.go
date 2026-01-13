@@ -17,6 +17,7 @@ func newAddCmd() *cobra.Command {
 		tagNames    []string
 		priority    string
 		dueDate     string
+		repeat      string
 	)
 
 	cmd := &cobra.Command{
@@ -83,7 +84,25 @@ func newAddCmd() *cobra.Command {
 				}
 			}
 
+			// Set recurrence
+			if repeat != "" {
+				pattern, interval := parseRepeat(repeat)
+				rec := model.NewRecurrence(task.ID, pattern, interval)
+				// Set next due based on task's due date or today
+				if task.DueDate != nil {
+					rec.NextDue = rec.CalculateNextDue(*task.DueDate)
+				} else {
+					rec.NextDue = rec.CalculateNextDue(time.Now())
+				}
+				if err := st.SetRecurrence(rec); err != nil {
+					return err
+				}
+			}
+
 			fmt.Printf("Created task #%d: %s\n", task.ID, task.Title)
+			if repeat != "" {
+				fmt.Printf("  Recurrence: %s\n", repeat)
+			}
 			return nil
 		},
 	}
@@ -92,6 +111,7 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringSliceVarP(&tagNames, "tag", "t", nil, "tags (can be repeated)")
 	cmd.Flags().StringVar(&priority, "priority", "", "priority (low/medium/high)")
 	cmd.Flags().StringVarP(&dueDate, "due", "d", "", "due date (today/tomorrow/YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&repeat, "repeat", "r", "", "recurrence pattern (daily/weekly/monthly/yearly or daily:2 for every 2 days)")
 
 	return cmd
 }
@@ -141,4 +161,19 @@ func parseDate(s string) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("unrecognized date format: %s", s)
+}
+
+// parseRepeat parses a recurrence pattern string like "daily" or "daily:2"
+func parseRepeat(s string) (model.RecurrencePattern, int) {
+	parts := strings.Split(s, ":")
+	pattern := model.ParseRecurrencePattern(parts[0])
+	interval := 1
+
+	if len(parts) > 1 {
+		if n, err := strconv.Atoi(parts[1]); err == nil && n > 0 {
+			interval = n
+		}
+	}
+
+	return pattern, interval
 }

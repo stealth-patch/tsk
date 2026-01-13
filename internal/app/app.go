@@ -45,6 +45,9 @@ const (
 	OverlayDueDate
 	OverlayTagSelect
 	OverlayTaskDetail
+	OverlayConfirmDeleteTag
+	OverlayConfirmDeleteProject
+	OverlayRecurrenceSelect
 )
 
 type Model struct {
@@ -231,6 +234,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.overlayCursor = 0
 				return m, nil
 			}
+
+		case msg.String() == "r":
+			// Set/remove recurrence
+			if m.selectedTask() != nil {
+				m.overlayMode = OverlayRecurrenceSelect
+				m.overlayCursor = 0
+				return m, nil
+			}
 		}
 
 		// View-specific keys
@@ -284,6 +295,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TagCreatedMsg:
 		m.statusText = fmt.Sprintf("✓ Created tag: %s", msg.Tag.Name)
 		cmds = append(cmds, loadTags(m.store), m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+
+	case TagDeletedMsg:
+		m.statusText = "✓ Tag deleted"
+		cmds = append(cmds, loadTags(m.store), m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+
+	case ProjectDeletedMsg:
+		m.statusText = "✓ Project deleted (tasks moved to Inbox)"
+		cmds = append(cmds, loadProjects(m.store), m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+
+	case RecurrenceSetMsg:
+		m.statusText = "✓ Recurrence set"
+		cmds = append(cmds, m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
+
+	case RecurrenceDeletedMsg:
+		m.statusText = "✓ Recurrence removed"
+		cmds = append(cmds, m.reloadTasks(), clearStatusAfter(1500*time.Millisecond))
 
 	case ErrorMsg:
 		m.statusText = msg.Err.Error()
@@ -341,7 +368,41 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectFormDesc = ""
 			m.projectFormFocus = 0
 			return m, nil
+
+		case msg.String() == "x":
+			// Delete project (not allowed for "All" option or Inbox)
+			if m.overlayCursor == 0 {
+				m.statusText = "Cannot delete 'All' filter"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			proj := m.projects[m.overlayCursor-1]
+			if proj.ID == 1 {
+				m.statusText = "Cannot delete Inbox project"
+				m.statusError = true
+				return m, clearStatusAfter(2 * time.Second)
+			}
+			m.overlayMode = OverlayConfirmDeleteProject
+			return m, nil
 		}
+
+	case OverlayConfirmDeleteProject:
+		switch msg.String() {
+		case "y", "Y":
+			m.overlayMode = OverlayNone
+			if m.overlayCursor > 0 && m.overlayCursor <= len(m.projects) {
+				proj := m.projects[m.overlayCursor-1]
+				// If currently viewing deleted project, switch to "All"
+				if m.currentProject != nil && *m.currentProject == proj.ID {
+					m.currentProject = nil
+					m.currentProjectName = "All"
+				}
+				return m, deleteProject(m.store, proj.ID)
+			}
+		default:
+			m.overlayMode = OverlayProjectSelect
+		}
+		return m, nil
 
 	case OverlayConfirmDelete:
 		switch msg.String() {
@@ -454,7 +515,28 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cmd = addTagToTask(m.store, task.ID, tag.ID)
 			}
 			return m, cmd
+
+		case msg.String() == "x":
+			// Delete tag (not allowed for "+ New tag..." option)
+			if m.overlayCursor >= len(m.tags) {
+				return m, nil
+			}
+			m.overlayMode = OverlayConfirmDeleteTag
+			return m, nil
 		}
+
+	case OverlayConfirmDeleteTag:
+		switch msg.String() {
+		case "y", "Y":
+			m.overlayMode = OverlayNone
+			if m.overlayCursor < len(m.tags) {
+				tag := m.tags[m.overlayCursor]
+				return m, deleteTag(m.store, tag.ID)
+			}
+		default:
+			m.overlayMode = OverlayTagSelect
+		}
+		return m, nil
 
 	case OverlayProjectCreate:
 		switch {
@@ -500,6 +582,56 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.projectFormName += " "
 			} else {
 				m.projectFormDesc += " "
+			}
+		}
+
+	case OverlayRecurrenceSelect:
+		// Options: Daily, Weekly, Monthly, Yearly, Remove (if has recurrence)
+		task := m.selectedTask()
+		if task == nil {
+			m.overlayMode = OverlayNone
+			return m, nil
+		}
+
+		hasRecurrence := false
+		if rec, _ := m.store.GetRecurrence(task.ID); rec != nil {
+			hasRecurrence = true
+		}
+
+		maxCursor := 3 // Daily, Weekly, Monthly, Yearly (0-3)
+		if hasRecurrence {
+			maxCursor = 4 // + Remove option
+		}
+
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			m.overlayMode = OverlayNone
+			return m, nil
+
+		case key.Matches(msg, Keys.Up):
+			if m.overlayCursor > 0 {
+				m.overlayCursor--
+			}
+
+		case key.Matches(msg, Keys.Down):
+			if m.overlayCursor < maxCursor {
+				m.overlayCursor++
+			}
+
+		case key.Matches(msg, Keys.Select):
+			m.overlayMode = OverlayNone
+			switch m.overlayCursor {
+			case 0:
+				return m, setRecurrence(m.store, task.ID, model.Daily, 1)
+			case 1:
+				return m, setRecurrence(m.store, task.ID, model.Weekly, 1)
+			case 2:
+				return m, setRecurrence(m.store, task.ID, model.Monthly, 1)
+			case 3:
+				return m, setRecurrence(m.store, task.ID, model.Yearly, 1)
+			case 4:
+				// Remove recurrence
+				return m, deleteRecurrence(m.store, task.ID)
 			}
 		}
 
@@ -882,10 +1014,16 @@ func (m Model) renderOverlay() string {
 		return m.renderProjectCreateOverlay()
 	case OverlayConfirmDelete:
 		return m.renderConfirmDeleteOverlay()
+	case OverlayConfirmDeleteTag:
+		return m.renderConfirmDeleteTagOverlay()
+	case OverlayConfirmDeleteProject:
+		return m.renderConfirmDeleteProjectOverlay()
 	case OverlayDueDate:
 		return m.renderDueDateOverlay()
 	case OverlayTagSelect:
 		return m.renderTagSelectOverlay()
+	case OverlayRecurrenceSelect:
+		return m.renderRecurrenceSelectOverlay()
 	case OverlayTaskDetail:
 		return m.renderTaskDetailOverlay()
 	}
@@ -914,6 +1052,7 @@ func (m Model) renderHelpOverlay() string {
 		"  x           Delete task",
 		"  d           Set due date",
 		"  t           Set tags",
+		"  r           Set recurrence",
 		"  1/2/3/0     Set priority (high/med/low/none)",
 		"  v           View task detail",
 		"",
@@ -1242,6 +1381,111 @@ func (m Model) renderTaskDetailOverlay() string {
 		BorderForeground(styles.Primary).
 		Padding(1, 2).
 		Width(60).
+		Render(content)
+}
+
+func (m Model) renderConfirmDeleteTagOverlay() string {
+	if m.overlayCursor >= len(m.tags) {
+		return ""
+	}
+	tag := m.tags[m.overlayCursor]
+
+	title := styles.Header.Render("Delete Tag?")
+	tagName := styles.Tag.Render(tag.Name)
+	warning := styles.MutedStyle.Render("This will remove the tag from all tasks.")
+
+	content := strings.Join([]string{
+		title,
+		"",
+		tagName,
+		warning,
+		"",
+		styles.MutedStyle.Render("y: yes  n: no"),
+	}, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Danger).
+		Padding(1, 2).
+		Render(content)
+}
+
+func (m Model) renderConfirmDeleteProjectOverlay() string {
+	if m.overlayCursor <= 0 || m.overlayCursor > len(m.projects) {
+		return ""
+	}
+	proj := m.projects[m.overlayCursor-1]
+
+	title := styles.Header.Render("Delete Project?")
+	projName := styles.ProjectBadge.Render(proj.Name)
+	warning := styles.MutedStyle.Render("Tasks will be moved to Inbox.")
+
+	content := strings.Join([]string{
+		title,
+		"",
+		projName,
+		warning,
+		"",
+		styles.MutedStyle.Render("y: yes  n: no"),
+	}, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Danger).
+		Padding(1, 2).
+		Render(content)
+}
+
+func (m Model) renderRecurrenceSelectOverlay() string {
+	task := m.selectedTask()
+	if task == nil {
+		return ""
+	}
+
+	title := styles.Header.Render("Set Recurrence")
+
+	hasRecurrence := false
+	var currentPattern string
+	if rec, _ := m.store.GetRecurrence(task.ID); rec != nil {
+		hasRecurrence = true
+		currentPattern = rec.PatternString()
+	}
+
+	options := []string{"Daily", "Weekly", "Monthly", "Yearly"}
+	if hasRecurrence {
+		options = append(options, "Remove")
+	}
+
+	var items []string
+	items = append(items, title, "")
+
+	if hasRecurrence {
+		items = append(items, styles.MutedStyle.Render("Current: "+currentPattern), "")
+	}
+
+	for i, opt := range options {
+		style := styles.TaskItem
+		if m.overlayCursor == i {
+			style = styles.TaskItemSelected
+		}
+
+		prefix := "  "
+		if i == 4 {
+			// Remove option
+			items = append(items, styles.MutedStyle.Render("─────────"))
+			prefix = "  "
+		}
+		items = append(items, prefix+style.Render(opt))
+	}
+
+	items = append(items, "", styles.MutedStyle.Render("↑/↓: select  Enter: confirm  Esc: cancel"))
+
+	content := strings.Join(items, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Primary).
+		Padding(1, 2).
 		Render(content)
 }
 

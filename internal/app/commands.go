@@ -131,3 +131,50 @@ func createTag(st *store.SQLiteStore, name string) tea.Cmd {
 		return TagCreatedMsg{Tag: tag}
 	}
 }
+
+func deleteTag(st *store.SQLiteStore, id int64) tea.Cmd {
+	return func() tea.Msg {
+		if err := st.DeleteTag(id); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return TagDeletedMsg{ID: id}
+	}
+}
+
+func deleteProject(st *store.SQLiteStore, id int64) tea.Cmd {
+	return func() tea.Msg {
+		if err := st.DeleteProject(id); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return ProjectDeletedMsg{ID: id}
+	}
+}
+
+func setRecurrence(st *store.SQLiteStore, taskID int64, pattern model.RecurrencePattern, interval int) tea.Cmd {
+	return func() tea.Msg {
+		rec := model.NewRecurrence(taskID, pattern, interval)
+		// Get task to determine next due date
+		task, err := st.GetTask(taskID)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+		if task.DueDate != nil {
+			rec.NextDue = rec.CalculateNextDue(*task.DueDate)
+		} else {
+			rec.NextDue = rec.CalculateNextDue(time.Now())
+		}
+		if err := st.SetRecurrence(rec); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return RecurrenceSetMsg{TaskID: taskID}
+	}
+}
+
+func deleteRecurrence(st *store.SQLiteStore, taskID int64) tea.Cmd {
+	return func() tea.Msg {
+		if err := st.DeleteRecurrence(taskID); err != nil {
+			return ErrorMsg{Err: err}
+		}
+		return RecurrenceDeletedMsg{TaskID: taskID}
+	}
+}

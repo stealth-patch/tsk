@@ -46,6 +46,26 @@ type TagCreatedMsg struct {
 	Tag *model.Tag
 }
 
+// TagDeletedMsg is sent when a tag is deleted
+type TagDeletedMsg struct {
+	ID int64
+}
+
+// ProjectDeletedMsg is sent when a project is deleted
+type ProjectDeletedMsg struct {
+	ID int64
+}
+
+// RecurrenceSetMsg is sent when recurrence is set on a task
+type RecurrenceSetMsg struct {
+	TaskID int64
+}
+
+// RecurrenceDeletedMsg is sent when recurrence is removed from a task
+type RecurrenceDeletedMsg struct {
+	TaskID int64
+}
+
 // ErrorMsg is sent when an error occurs
 type ErrorMsg struct {
 	Err error

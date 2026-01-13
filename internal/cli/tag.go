@@ -18,6 +18,7 @@ func newTagCmd() *cobra.Command {
 
 	cmd.AddCommand(newTagListCmd())
 	cmd.AddCommand(newTagAddCmd())
+	cmd.AddCommand(newTagRmCmd())
 
 	return cmd
 }
@@ -84,6 +85,51 @@ func newTagAddCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&color, "color", "c", "", "tag color (hex, e.g., #FF0000)")
+
+	return cmd
+}
+
+func newTagRmCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:     "rm <name>",
+		Aliases: []string{"remove", "delete"},
+		Short:   "Delete a tag",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+
+			// Find the tag
+			tag, err := st.GetTagByName(name)
+			if err != nil {
+				return err
+			}
+			if tag == nil {
+				return fmt.Errorf("tag not found: %s", name)
+			}
+
+			// Confirm deletion
+			if !force {
+				fmt.Printf("Delete tag '%s'? This will remove it from all tasks. [y/N] ", name)
+				var confirm string
+				fmt.Scanln(&confirm)
+				if confirm != "y" && confirm != "Y" {
+					fmt.Println("Cancelled.")
+					return nil
+				}
+			}
+
+			if err := st.DeleteTag(tag.ID); err != nil {
+				return err
+			}
+
+			fmt.Printf("Deleted tag: %s\n", name)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation")
 
 	return cmd
 }

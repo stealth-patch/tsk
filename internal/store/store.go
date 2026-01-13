@@ -35,6 +35,7 @@ type Store interface {
 	GetTag(id int64) (*model.Tag, error)
 	GetTagByName(name string) (*model.Tag, error)
 	ListTags() ([]model.Tag, error)
+	DeleteTag(id int64) error
 	AddTagToTask(taskID, tagID int64) error
 	RemoveTagFromTask(taskID, tagID int64) error
 	GetTaskTags(taskID int64) ([]model.Tag, error)
