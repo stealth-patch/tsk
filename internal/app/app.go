@@ -576,7 +576,7 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		case msg.Type == tea.KeyBackspace:
 			if len(m.tagFormName) > 0 {
-				m.tagFormName = m.tagFormName[:len(m.tagFormName)-1]
+				m.tagFormName = truncateRunes(m.tagFormName, 1)
 			}
 
 		case msg.Type == tea.KeyRunes:
@@ -628,7 +628,7 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		case msg.Type == tea.KeyBackspace:
 			if len(m.dueDateFormValue) > 0 {
-				m.dueDateFormValue = m.dueDateFormValue[:len(m.dueDateFormValue)-1]
+				m.dueDateFormValue = truncateRunes(m.dueDateFormValue, 1)
 			}
 
 		case msg.Type == tea.KeyRunes:
@@ -662,9 +662,9 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		case msg.Type == tea.KeyBackspace:
 			if m.projectFormFocus == 0 && len(m.projectFormName) > 0 {
-				m.projectFormName = m.projectFormName[:len(m.projectFormName)-1]
+				m.projectFormName = truncateRunes(m.projectFormName, 1)
 			} else if m.projectFormFocus == 1 && len(m.projectFormDesc) > 0 {
-				m.projectFormDesc = m.projectFormDesc[:len(m.projectFormDesc)-1]
+				m.projectFormDesc = truncateRunes(m.projectFormDesc, 1)
 			}
 
 		case msg.Type == tea.KeyRunes:
