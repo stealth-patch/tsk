@@ -18,8 +18,8 @@ var (
 	// App title - extra prominent
 	AppTitle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(PrimaryLight).
-		Background(PrimaryDark).
+		Foreground(Foreground).
+		Background(Primary).
 		Padding(0, 2)
 
 	Title = lipgloss.NewStyle().

@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hwanchang/tsk/internal/app"
+	"github.com/hwanchang/tsk/internal/config"
 	"github.com/hwanchang/tsk/internal/db"
 	"github.com/hwanchang/tsk/internal/store"
+	"github.com/hwanchang/tsk/internal/styles"
 )
 
 var (
@@ -83,6 +85,10 @@ func Execute() {
 }
 
 func runTUI() error {
+	// Load config and apply theme
+	config.Load()
+	styles.ApplyTheme(config.GetTheme())
+
 	m := app.New(st)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 

@@ -24,6 +24,9 @@ type KeyMap struct {
 	Filter  key.Binding
 	Project key.Binding
 
+	// Settings
+	Theme key.Binding
+
 	// General
 	Help   key.Binding
 	Cancel key.Binding
@@ -82,6 +85,10 @@ var Keys = KeyMap{
 	Project: key.NewBinding(
 		key.WithKeys("p"),
 		key.WithHelp("p", "project"),
+	),
+	Theme: key.NewBinding(
+		key.WithKeys("T"),
+		key.WithHelp("T", "theme"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),

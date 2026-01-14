@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hwanchang/tsk/internal/config"
 	"github.com/hwanchang/tsk/internal/model"
 	"github.com/hwanchang/tsk/internal/store"
 	"github.com/hwanchang/tsk/internal/styles"
@@ -50,6 +51,7 @@ const (
 	OverlayConfirmDeleteTag
 	OverlayConfirmDeleteProject
 	OverlayRecurrenceSelect
+	OverlayThemeSelect
 )
 
 type Model struct {
@@ -202,6 +204,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, Keys.Project):
 			m.overlayMode = OverlayProjectSelect
 			m.overlayCursor = 0
+			return m, nil
+
+		case key.Matches(msg, Keys.Theme):
+			m.overlayMode = OverlayThemeSelect
+			// Find current theme index
+			currentTheme := config.GetTheme()
+			for i, name := range styles.ThemeNames {
+				if name == currentTheme {
+					m.overlayCursor = i
+					break
+				}
+			}
 			return m, nil
 
 		case msg.String() == "A":
@@ -722,6 +736,33 @@ func (m Model) handleOverlay(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Any key closes the detail overlay
 		m.overlayMode = OverlayNone
 		return m, nil
+
+	case OverlayThemeSelect:
+		maxCursor := len(styles.ThemeNames) - 1
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			m.overlayMode = OverlayNone
+			return m, nil
+
+		case key.Matches(msg, Keys.Up):
+			if m.overlayCursor > 0 {
+				m.overlayCursor--
+			}
+
+		case key.Matches(msg, Keys.Down):
+			if m.overlayCursor < maxCursor {
+				m.overlayCursor++
+			}
+
+		case key.Matches(msg, Keys.Select):
+			themeName := styles.ThemeNames[m.overlayCursor]
+			config.SetTheme(themeName)
+			config.Save()
+			styles.ApplyTheme(themeName)
+			m.overlayMode = OverlayNone
+			m.statusText = "Theme: " + styles.Themes[themeName].Name
+			return m, clearStatusAfter(2 * time.Second)
+		}
 	}
 
 	return m, nil
@@ -1113,6 +1154,8 @@ func (m Model) renderOverlay() string {
 		return m.renderRecurrenceSelectOverlay()
 	case OverlayTaskDetail:
 		return m.renderTaskDetailOverlay()
+	case OverlayThemeSelect:
+		return m.renderThemeSelectOverlay()
 	}
 	return ""
 }
@@ -1634,6 +1677,45 @@ func (m Model) renderRecurrenceSelectOverlay() string {
 	}
 
 	items = append(items, "", styles.MutedStyle.Render("↑/↓: select  Enter: confirm  Esc: cancel"))
+
+	content := strings.Join(items, "\n")
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Primary).
+		Padding(1, 2).
+		Render(content)
+}
+
+func (m Model) renderThemeSelectOverlay() string {
+	title := styles.Header.Render("Select Theme")
+
+	currentTheme := config.GetTheme()
+
+	var items []string
+	items = append(items, title, "")
+
+	for i, name := range styles.ThemeNames {
+		theme := styles.Themes[name]
+		style := styles.TaskItem
+		if m.overlayCursor == i {
+			style = styles.TaskItemSelected
+		}
+
+		// Show theme name with color preview
+		preview := lipgloss.NewStyle().
+			Foreground(theme.Primary).
+			Render("●")
+
+		check := "  "
+		if name == currentTheme {
+			check = "✓ "
+		}
+
+		items = append(items, style.Render(check+preview+" "+theme.Name))
+	}
+
+	items = append(items, "", styles.MutedStyle.Render("↑/↓: select  Enter: apply  Esc: cancel"))
 
 	content := strings.Join(items, "\n")
 
