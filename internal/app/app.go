@@ -1983,8 +1983,9 @@ func (m Model) renderTaskItemWithWidth(task model.Task, selected bool, width int
 		maxTitleLen = 20
 	}
 	title := task.Title
-	if len(title) > maxTitleLen {
-		title = title[:maxTitleLen-3] + "..."
+	titleRunes := []rune(title)
+	if len(titleRunes) > maxTitleLen {
+		title = string(titleRunes[:maxTitleLen-3]) + "..."
 	}
 	title = titleStyle.Render(title)
 
@@ -2026,8 +2027,8 @@ func (m Model) renderTaskItemWithWidth(task model.Task, selected bool, width int
 			availableForTitle = 10
 		}
 		title = task.Title
-		for lipgloss.Width(title) > availableForTitle && len(title) > 0 {
-			title = title[:len(title)-1]
+		for lipgloss.Width(title) > availableForTitle && len([]rune(title)) > 0 {
+			title = truncateRunes(title, 1)
 		}
 		title = titleStyle.Render(title + "...")
 		line = fmt.Sprintf("%s %s %s%s", statusIcon, priority, title, suffix)
@@ -2105,8 +2106,8 @@ func (m Model) renderBoardTaskItem(task model.Task, selected bool, maxWidth int)
 	title := task.Title
 	if lipgloss.Width(title) > availableWidth {
 		// Truncate title
-		for lipgloss.Width(title) > availableWidth-3 && len(title) > 0 {
-			title = title[:len(title)-1]
+		for lipgloss.Width(title) > availableWidth-3 && len([]rune(title)) > 0 {
+			title = truncateRunes(title, 1)
 		}
 		title += "..."
 	}
@@ -2130,8 +2131,8 @@ func (m Model) renderBoardTaskItem(task model.Task, selected bool, maxWidth int)
 			availableForTitle = 5
 		}
 		title := task.Title
-		for lipgloss.Width(title) > availableForTitle && len(title) > 0 {
-			title = title[:len(title)-1]
+		for lipgloss.Width(title) > availableForTitle && len([]rune(title)) > 0 {
+			title = truncateRunes(title, 1)
 		}
 		title += "..."
 		if selected {
@@ -2238,6 +2239,15 @@ func (m Model) renderStatusBar() string {
 }
 
 // Helper methods
+
+// truncateRunes removes count runes from the end of string, preserving UTF-8 characters
+func truncateRunes(s string, count int) string {
+	runes := []rune(s)
+	if count >= len(runes) {
+		return ""
+	}
+	return string(runes[:len(runes)-count])
+}
 
 func (m Model) selectedTask() *model.Task {
 	if m.activeView == ViewBoard {

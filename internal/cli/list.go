@@ -117,8 +117,9 @@ func printTable(tasks []model.Task) error {
 		tags := formatTags(t.Tags)
 
 		title := t.Title
-		if len(title) > 40 {
-			title = title[:37] + "..."
+		titleRunes := []rune(title)
+		if len(titleRunes) > 40 {
+			title = string(titleRunes[:37]) + "..."
 		}
 
 		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n",
