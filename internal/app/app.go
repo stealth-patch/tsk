@@ -1049,8 +1049,8 @@ func (m Model) View() string {
 	if boxWidth < 60 {
 		boxWidth = 60
 	}
-	if boxWidth > 120 {
-		boxWidth = 120
+	if boxWidth > 180 {
+		boxWidth = 180
 	}
 	if boxHeight < 20 {
 		boxHeight = 20
@@ -1920,8 +1920,8 @@ func (m Model) renderBoardViewWithSize(width, height int) string {
 	if colWidth < 20 {
 		colWidth = 20
 	}
-	if colWidth > 35 {
-		colWidth = 35
+	if colWidth > 55 {
+		colWidth = 55
 	}
 
 	// Column height (subtract column border/padding: 4)
